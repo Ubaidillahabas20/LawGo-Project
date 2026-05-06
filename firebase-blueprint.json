@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "Job": {
+      "title": "Job",
+      "description": "Represents a legal document analysis job",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Title of the analyzed document"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "The user ID of the owner"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "PROCESSING", "SUCCESS", "FAILED"],
+          "description": "Current status of the job"
+        },
+        "progress": {
+          "type": "number",
+          "description": "Progress percentage"
+        },
+        "data": {
+          "type": "object",
+          "description": "Analysis result data"
+        },
+        "error": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "status", "progress", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "jobs/{jobId}": {
+      "schema": "Job",
+      "description": "Stores legal document analysis jobs"
+    }
+  }
+}

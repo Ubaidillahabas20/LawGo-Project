@@ -1,11 +1,9 @@
-import Sidebar from '../components/Sidebar';
+import Layout from '../components/Layout';
 
 export default function HelpPage() {
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans">
-      <Sidebar />
-      <main className="flex-1 p-8 md:p-12 overflow-y-auto">
-        <header className="mb-10">
+    <Layout>
+      <header className="mb-10">
           <h1 className="text-3xl font-bold text-slate-900">Bantuan</h1>
           <p className="text-slate-500 mt-2">Pusat bantuan dan dukungan tambahan platform LawGo.</p>
         </header>
@@ -30,7 +28,6 @@ export default function HelpPage() {
             </div>
           </div>
         </section>
-      </main>
-    </div>
+    </Layout>
   );
 }

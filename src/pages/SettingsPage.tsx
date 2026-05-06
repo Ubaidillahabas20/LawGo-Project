@@ -1,4 +1,4 @@
-import Sidebar from '../components/Sidebar';
+import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { User, LogOut } from 'lucide-react';
 
@@ -6,10 +6,8 @@ export default function SettingsPage() {
   const { isLoggedIn, user, logout } = useAuth();
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans">
-      <Sidebar />
-      <main className="flex-1 p-8 md:p-12 overflow-y-auto">
-        <header className="mb-10">
+    <Layout>
+      <header className="mb-10">
           <h1 className="text-3xl font-bold text-slate-900">Pengaturan</h1>
           <p className="text-slate-500 mt-2">Kelola preferensi akun dan aplikasi Anda.</p>
         </header>
@@ -24,7 +22,7 @@ export default function SettingsPage() {
                   <User className="w-6 h-6" />
                 </div>
                 <div>
-                  <h4 className="font-semibold text-slate-900">{user?.name}</h4>
+                  <h4 className="font-semibold text-slate-900">{user?.displayName || 'Set in Google'}</h4>
                   <p className="text-slate-500 text-sm">{user?.email}</p>
                 </div>
               </div>
@@ -43,7 +41,6 @@ export default function SettingsPage() {
             <p className="text-slate-500">Anda belum masuk. Silakan login untuk melihat profil Anda.</p>
           )}
         </section>
-      </main>
-    </div>
+    </Layout>
   );
 }

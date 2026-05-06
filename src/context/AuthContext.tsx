@@ -1,43 +1,56 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged,
+  User 
+} from 'firebase/auth';
+import { auth } from '../lib/firebase';
 
 type AuthContextType = {
   isLoggedIn: boolean;
-  loginWithGoogle: () => void;
-  loginWithEmail: (email: string, pass: string) => void;
-  signupWithEmail: (name: string, email: string, pass: string) => void;
-  logout: () => void;
-  user: any;
+  isInitializing: boolean;
+  loginWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
+  user: User | null;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
 
-  const loginWithGoogle = () => {
-    // Simulating Google login for now
-    setIsLoggedIn(true);
-    setUser({ name: 'User LawGo', email: 'user@lawgo.id' });
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsInitializing(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const loginWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Google login failed", error);
+    }
   };
 
-  const loginWithEmail = (email: string, pass: string) => {
-    setIsLoggedIn(true);
-    setUser({ name: email.split('@')[0], email });
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
   };
 
-  const signupWithEmail = (name: string, email: string, pass: string) => {
-    setIsLoggedIn(true);
-    setUser({ name, email });
-  };
-
-  const logout = () => {
-    setIsLoggedIn(false);
-    setUser(null);
-  };
+  const isLoggedIn = !!user;
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, loginWithGoogle, loginWithEmail, signupWithEmail, logout, user }}>
+    <AuthContext.Provider value={{ isLoggedIn, isInitializing, loginWithGoogle, logout, user }}>
       {children}
     </AuthContext.Provider>
   );

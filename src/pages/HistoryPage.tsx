@@ -1,20 +1,40 @@
-import Sidebar from '../components/Sidebar';
+import Layout from '../components/Layout';
 import { Clock, FileText, Search } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { useAuth } from '../context/AuthContext';
 
 export default function HistoryPage() {
-  const allAnalyses = [
-    { id: '1', title: 'Perjanjian Jual Beli Tanah.pdf', date: '2 Jam yang lalu', risk: 'High' },
-    { id: '2', title: 'Kontrak Kerja Karyawan Swasta', date: 'Kemarin', risk: 'Medium' },
-    { id: '3', title: 'Sewa Apartemen 1 Tahun.pdf', date: '3 Hari yang lalu', risk: 'Low' },
-    { id: '4', title: 'Term of Service Aplikasi XYZ', date: '1 Minggu yang lalu', risk: 'Medium' },
-    { id: '5', title: 'Perjanjian Pra-Nikah.pdf', date: '2 Minggu yang lalu', risk: 'Low' },
-  ];
+  const { user } = useAuth();
+  const [allAnalyses, setAllAnalyses] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(db, 'jobs'),
+      where('ownerId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        title: doc.data().title || 'Dokumen Teks',
+        date: new Date(doc.data().createdAt).toLocaleDateString('id-ID'),
+        risk: doc.data().data?.overallThreatLevel || 'Medium'
+      }));
+      setAllAnalyses(data);
+    }, (error) => {
+      try {
+        handleFirestoreError(error, OperationType.LIST, 'jobs');
+      } catch (e) {}
+    });
+    return () => unsubscribe();
+  }, [user]);
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans">
-      <Sidebar />
-      <main className="flex-1 p-8 md:p-12 overflow-y-auto">
-        <header className="mb-10">
+    <Layout>
+      <header className="mb-10">
           <h1 className="text-3xl font-bold text-slate-900">Riwayat Analisis</h1>
           <p className="text-slate-500 mt-2">Daftar semua dokumen yang telah Anda analisis sebelumnya.</p>
         </header>
@@ -32,7 +52,9 @@ export default function HistoryPage() {
           </div>
           
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-            {allAnalyses.map((item, idx) => (
+            {allAnalyses.length === 0 ? (
+                 <div className="p-8 text-center text-slate-500">Belum ada riwayat analisis.</div>
+            ) : allAnalyses.map((item, idx) => (
               <div key={item.id} className={`p-4 md:px-6 md:py-5 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition border-b border-slate-100 ${idx === allAnalyses.length - 1 ? 'border-b-0' : ''}`}>
                 <div className="flex items-center gap-4">
                   <div className={`p-3 rounded-xl ${item.risk === 'High' ? 'bg-rose-100 text-rose-600' : item.risk === 'Medium' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
@@ -54,7 +76,6 @@ export default function HistoryPage() {
             ))}
           </div>
         </section>
-      </main>
-    </div>
+    </Layout>
   );
 }

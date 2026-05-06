@@ -1,37 +1,43 @@
 import { useState, useEffect } from 'react';
-import Sidebar from '../components/Sidebar';
+import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { Upload, FileText, AlertTriangle, CheckCircle, Info, Loader2, ShieldCheck } from 'lucide-react';
+import { doc, setDoc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 
 export default function AnalyzerPage() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user } = useAuth();
   const [textInput, setTextInput] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
   const [jobStatus, setJobStatus] = useState<string>('');
 
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const handleAnalyze = async () => {
-    if (!textInput.trim()) return;
+    if (!textInput.trim() || !user) return;
     setIsAnalyzing(true);
     setJobId(null);
     setResult(null);
+    setErrorMessage(null);
 
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: textInput })
+        body: JSON.stringify({ text: textInput, userId: user.uid })
       });
       const data = await res.json();
       if (data.job_id) {
         setJobId(data.job_id);
       } else {
-        alert('Error starting analysis');
+        setErrorMessage('Gagal memulai analisis. Silakan coba lagi.');
         setIsAnalyzing(false);
       }
     } catch (err) {
       console.error(err);
+      setErrorMessage('Terjadi kesalahan jaringan.');
       setIsAnalyzing(false);
     }
   };
@@ -41,7 +47,17 @@ export default function AnalyzerPage() {
     if (jobId && isAnalyzing) {
       interval = setInterval(async () => {
         try {
-          const res = await fetch(`/api/result/${jobId}`);
+          const res = await fetch(`/api/result/${jobId}?userId=${user?.uid}`);
+          
+          if (!res.ok) {
+            const errorText = await res.text();
+            console.error("Polling error:", res.status, errorText);
+            setErrorMessage(`Analisis gagal: Server mengembalikan status ${res.status}`);
+            setIsAnalyzing(false);
+            clearInterval(interval);
+            return;
+          }
+
           const data = await res.json();
           setJobStatus(data.status);
           
@@ -49,13 +65,40 @@ export default function AnalyzerPage() {
             setResult(data.data);
             setIsAnalyzing(false);
             clearInterval(interval);
+            
+            try {
+               await setDoc(doc(db, 'jobs', jobId), {
+                 title: textInput.length > 30 ? textInput.substring(0, 30).replace(/\n/g, ' ') + '...' : (textInput.trim() || 'Dokumen Teks'),
+                 ownerId: user?.uid,
+                 status: 'SUCCESS',
+                 progress: 100,
+                 data: data.data,
+                 createdAt: new Date().toISOString(),
+                 updatedAt: new Date().toISOString()
+               });
+            } catch (error) {
+               try {
+                 handleFirestoreError(error, OperationType.WRITE, `jobs/${jobId}`);
+               } catch (e: any) {
+                 setErrorMessage('Catatan riwayat gagal diperbarui: ' + e.message);
+               }
+            }
           } else if (data.status === 'FAILED') {
-            alert('Analysis failed: ' + data.error);
+            // Check if it's an API key error
+            const errorMsgLower = data.error?.toLowerCase() || "";
+            if (errorMsgLower.includes("api key") || data.error.includes("API_KEY_MISSING") || errorMsgLower.includes("api_key")) {
+               setErrorMessage('API Key Gemini bermasalah atau belum dikonfigurasi. Silakan atur di menu Settings (Secrets) di AI Studio Anda lalu coba lagi.');
+            } else {
+               setErrorMessage('Analisis gagal: ' + data.error);
+            }
             setIsAnalyzing(false);
             clearInterval(interval);
           }
         } catch (err) {
-          console.error(err);
+          console.error("Fetch polling error:", err);
+          setErrorMessage('Terjadi kesalahan saat memproses data. Silakan coba lagi.');
+          setIsAnalyzing(false);
+          clearInterval(interval);
         }
       }, 2000);
     }
@@ -63,10 +106,8 @@ export default function AnalyzerPage() {
   }, [jobId, isAnalyzing]);
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans">
-      <Sidebar />
-      <main className="flex-1 p-8 md:p-12 overflow-y-auto">
-        <header className="mb-10">
+    <Layout>
+      <header className="mb-10">
           <h1 className="text-3xl font-bold text-slate-900">Analisis Dokumen Baru</h1>
           <p className="text-slate-500 mt-2">Upload file PDF atau langsung tempel teks perjanjian yang ingin Anda periksa.</p>
         </header>
@@ -87,6 +128,12 @@ export default function AnalyzerPage() {
           </div>
         ) : !isAnalyzing && !result && (
           <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-4xl">
+            {errorMessage && (
+              <div className="bg-rose-50 text-rose-700 border border-rose-200 p-4 rounded-xl mb-6 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <p className="font-medium text-sm">{errorMessage}</p>
+              </div>
+            )}
             <div className="border-2 border-dashed border-slate-300 rounded-xl p-10 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-50 transition mb-6">
               <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4">
                 <Upload className="w-8 h-8" />
@@ -218,7 +265,6 @@ export default function AnalyzerPage() {
           </div>
         )}
 
-      </main>
-    </div>
+    </Layout>
   );
 }
