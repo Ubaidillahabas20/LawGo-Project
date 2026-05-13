@@ -3,10 +3,11 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ShieldCheck, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
-export default function AuthPage() {
-  const { loginWithGoogle, loginWithEmail, isLoggedIn } = useAuth();
+export default function SignUpPage() {
+  const { loginWithGoogle, registerWithEmail, isLoggedIn } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -22,19 +23,22 @@ export default function AuthPage() {
     await loginWithGoogle();
   };
 
-  const handleEmailAuth = async (e: React.FormEvent) => {
+  const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      await loginWithEmail(email, password);
+      await registerWithEmail(email, password);
+      // Optional: Update profile with name here if needed later
     } catch (err: any) {
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-        setError('Akun tidak ditemukan atau kata sandi salah. Silakan daftar jika belum memiliki akun.');
+      if (err.code === 'auth/email-already-in-use') {
+        setError('Email sudah terdaftar. Silakan gunakan email lain atau masuk dengan akun tersebut.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Kata sandi terlalu lemah. Minimal 6 karakter.');
       } else if (err.code === 'auth/operation-not-allowed') {
         setError('Metode login Email/Kata Sandi belum diaktifkan di Firebase Console.');
       } else {
-        setError('Gagal masuk: ' + (err.message || 'Terjadi kesalahan'));
+        setError('Gagal mendaftar: ' + (err.message || 'Terjadi kesalahan'));
       }
     } finally {
       setLoading(false);
@@ -78,7 +82,7 @@ export default function AuthPage() {
         </div>
       </div>
 
-      {/* Right Pane - Login Form */}
+      {/* Right Pane - Signup Form */}
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 py-12 sm:p-16 xl:p-24 bg-white dark:bg-slate-800 relative">
         <Link to="/" className="lg:absolute lg:top-12 lg:left-12 flex items-center gap-2 mb-12 lg:mb-0 w-max mx-auto lg:mx-0">
           <div className="bg-indigo-600 dark:bg-indigo-500 p-1.5 rounded-lg flex items-center justify-center">
@@ -88,9 +92,9 @@ export default function AuthPage() {
         </Link>
 
         <div className="w-full max-w-sm sm:max-w-md mx-auto">
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Masuk ke LawGo</h2>
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Daftar Akun Baru</h2>
           <p className="text-slate-500 dark:text-slate-400 mb-8 text-sm">
-            Mulai analisis. Temukan celah. Amankan hak Anda!
+            Mulai analisis gratis hari ini. Amankan hak Anda!
           </p>
           
           {error && (
@@ -99,7 +103,18 @@ export default function AuthPage() {
             </div>
           )}
 
-          <form onSubmit={handleEmailAuth} className="space-y-5">
+          <form onSubmit={handleEmailSignup} className="space-y-5">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Nama Lengkap</label>
+              <input 
+                type="text" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Yanto Suprianto"
+                required
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 focus:bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none transition"
+              />
+            </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Email</label>
               <input 
@@ -113,8 +128,7 @@ export default function AuthPage() {
             </div>
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Kata Sandi</label>
-                 <Link to="/forgot-password" className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700  transition">Lupa kata sandi?</Link>
+                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Buat Kata Sandi</label>
               </div>
               <div className="relative">
                 <input 
@@ -123,6 +137,7 @@ export default function AuthPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
+                  minLength={6}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 focus:bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none transition"
                 />
                 <button 
@@ -140,13 +155,13 @@ export default function AuthPage() {
               disabled={loading}
               className="w-full bg-indigo-600 dark:bg-indigo-500 text-white font-semibold py-3.5 rounded-xl shadow-sm dark:shadow-none shadow-indigo-200 hover:bg-indigo-700 transition disabled:opacity-70 flex justify-center items-center"
             >
-              {loading ? 'Masuk...' : 'Masuk'}
+              {loading ? 'Mendaftar...' : 'Daftar Akun'}
             </button>
           </form>
 
           <div className="mt-8 flex items-center gap-4">
              <div className="flex-1 h-px bg-slate-200"></div>
-             <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Atau lanjutkan dengan</span>
+             <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Atau daftar dengan</span>
              <div className="flex-1 h-px bg-slate-200"></div>
           </div>
 
@@ -175,7 +190,7 @@ export default function AuthPage() {
           </div>
 
           <p className="mt-8 text-center text-sm text-slate-600 dark:text-slate-400">
-             Belum punya akun? <Link to="/signup" className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">Daftar di sini</Link>
+             Sudah punya akun? <Link to="/login" className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">Masuk di sini</Link>
           </p>
         </div>
       </div>

@@ -4,27 +4,54 @@ import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import { GoogleGenAI } from '@google/genai';
 import path from 'path';
+import helmet from 'helmet';
+import cors from 'cors';
+import crypto from 'crypto';
 
 // This is an in-memory simulation of the Celery worker queue 
 const jobs = new Map();
 
 // Configure Rate Limiting to prevent DDoS & Spamming
+const keyGenerator = (req: express.Request) => {
+  return (req.headers['x-forwarded-for'] as string)?.split(',')[0] || 
+         (req.headers['forwarded'] as string) || 
+         req.ip || 
+         'unknown';
+};
+
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
-  message: { error: 'Terlalu banyak permintaan dari IP ini, silakan coba lagi setelah 15 menit.' }
+  message: { error: 'Terlalu banyak permintaan dari IP ini, silakan coba lagi setelah 15 menit.' },
+  keyGenerator,
+  validate: { xForwardedForHeader: false, trustProxy: false }
 });
 
 const analyzeLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 10, // Limit each IP to 10 analysis requests per minute (Spamming protection)
-  message: { error: 'Terlalu banyak dokumen yang dikirim. Silakan coba lagi sebentar lagi.' }
+  message: { error: 'Terlalu banyak dokumen yang dikirim. Silakan coba lagi sebentar lagi.' },
+  keyGenerator,
+  validate: { xForwardedForHeader: false, trustProxy: false }
 });
 
 async function startServer() {
   const app = express();
+  
+  // Trust proxy for rate limiting behind reverse proxies (like Cloud Run)
+  app.set('trust proxy', 1);
+  
   const PORT = 3000;
   
+  // Apply Helmet for OWASP Top 10 security headers
+  app.use(helmet({
+    contentSecurityPolicy: false, // disabled for Vite HMR and local development
+    crossOriginEmbedderPolicy: false
+  }));
+
+  // Apply CORS
+  app.use(cors());
+
   // Apply global rate limiting to all requests
   app.use(globalLimiter);
 
@@ -54,13 +81,18 @@ async function startServer() {
 
   // Example analyze endpoint that triggers a "background" job
   app.post('/api/analyze', analyzeLimiter, upload.single('file'), async (req, res) => {
-    const jobId = Math.random().toString(36).substring(7);
+    const jobId = crypto.randomUUID(); // Secure, unguessable ID
     const content = req.file ? req.file.buffer.toString() : req.body.text;
     const userId = req.body.userId;
     
     if (!content) {
       return res.status(400).json({ error: 'No content provided' });
     }
+    
+    if (content.length > 10000) {
+      return res.status(413).json({ error: 'Teks terlalu panjang. Maksimal 10.000 karakter.' });
+    }
+
     if (!userId) {
       return res.status(401).json({ error: 'User ID is required for security' });
     }
@@ -112,13 +144,19 @@ async function processDocument(jobId: string, text: string, userId: string) {
     Format your response as a strictly valid JSON object matching this schema:
     {
       "summary": "String explaining the document in simple terms (Indonesian)",
-      "overallThreatLevel": "Low | Medium | High",
+      "overallThreatLevel": "Safe | Low | Medium | High",
+      "overallRiskScore": "Number between 0 and 100",
+      "potentialLoss": "String representing estimated potential loss in Rp or descriptive text (Indonesian)",
+      "quickTips": "String of brief advice/tips (Indonesian)",
       "clauses": [
         {
-          "originalText": "String",
+          "title": "String, short title of the clause",
+          "originalText": "String actual text from the document",
           "simplifiedText": "String explained in simple Indonesian",
           "analogy": "String of a relatable local Indonesian analogy",
-          "riskScore": "Low | Medium | High",
+          "basis": "String of legal basis or common law principle in Indonesia",
+          "riskScore": "Safe | Low | Medium | High",
+          "score": "Number between 0 and 100 representing risk severity of this clause",
           "recommendation": "String prescribing action"
         }
       ]
